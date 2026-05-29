@@ -34,7 +34,7 @@ const CameraFeed = ({ cam, isProgram, isPreview, onClick, videoRef, onVideoLoad 
       position: "relative", background: "#0d1117",
       border: isProgram ? "2px solid #ef4444" : isPreview ? "2px solid #22c55e" : "2px solid #1f2937",
       borderRadius: "8px", cursor: cam.connected ? "pointer" : "default",
-      overflow: "hidden", height: "100%",
+      overflow: "hidden", aspectRatio: "16/9",
       transition: "border-color 0.15s, box-shadow 0.15s",
       boxShadow: isProgram
         ? "0 0 0 1px rgba(239,68,68,0.15), 0 4px 24px rgba(239,68,68,0.12)"
@@ -49,7 +49,7 @@ const CameraFeed = ({ cam, isProgram, isPreview, onClick, videoRef, onVideoLoad 
       style={{
         position: "absolute", inset: 0,
         width: "100%", height: "100%",
-        objectFit: cam.isPortrait ? "contain" : "cover",
+        objectFit: "contain",
         display: cam.hasStream ? "block" : "none",
         background: "#000",
       }}
@@ -97,8 +97,8 @@ const CameraFeed = ({ cam, isProgram, isPreview, onClick, videoRef, onVideoLoad 
 );
 
 const Monitor = ({ cam, isProgram, videoRef }) => (
-  <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8, flexShrink: 0 }}>
+  <div style={{ display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
       <div style={{
         width: 7, height: 7, borderRadius: "50%",
         background: isProgram ? "#ef4444" : "#22c55e",
@@ -109,14 +109,14 @@ const Monitor = ({ cam, isProgram, videoRef }) => (
       </span>
     </div>
     <div style={{
-      flex: 1, minHeight: 0, background: "#0d1117",
+      aspectRatio: "16/9", background: "#0d1117",
       border: `2px solid ${isProgram ? "#ef4444" : "#22c55e"}`,
       borderRadius: "8px", position: "relative", overflow: "hidden",
       boxShadow: isProgram ? "0 0 32px rgba(239,68,68,0.12)" : "0 0 24px rgba(34,197,94,0.08)",
     }}>
       <video ref={videoRef} autoPlay playsInline muted style={{
         position: "absolute", inset: 0, width: "100%", height: "100%",
-        objectFit: cam?.isPortrait ? "contain" : "cover",
+        objectFit: "contain",
         display: cam?.hasStream ? "block" : "none",
         background: "#000",
       }} />
@@ -615,7 +615,7 @@ export default function Director() {
           <p style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 12 }}>
             Sources
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, height: "18vh" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
             {mergedCameras.map(cam => (
               <CameraFeed
                 key={cam.id}
@@ -631,7 +631,7 @@ export default function Director() {
         </section>
 
         {/* Monitors + switcher */}
-        <section style={{ display: "grid", gridTemplateColumns: "1fr 88px 1fr", gap: 12, flex: 1, minHeight: 0 }}>
+        <section style={{ display: "grid", gridTemplateColumns: "1fr 88px 1fr", gap: 12, alignItems: "start" }}>
           <Monitor cam={previewCam} isProgram={false} videoRef={el => { monitorRefs.current.preview = el; }} />
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8, justifyContent: "center" }}>
