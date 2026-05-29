@@ -566,6 +566,23 @@ export default function Director() {
             </div>
           )}
 
+          <button
+            onClick={() => roomId && window.open(`${window.location.origin}/multiviewer?room=${roomId}`, "_blank")}
+            disabled={!roomId}
+            title={roomId ? "Open Multiviewer" : "Connecting…"}
+            style={{
+              background: "#1a2030", border: "1px solid #2a3447", borderRadius: "6px", color: roomId ? "#d1d5db" : "#374151",
+              fontSize: 11, fontWeight: 600, padding: "6px 14px", cursor: roomId ? "pointer" : "default",
+              fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6,
+              transition: "color 0.15s",
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+              <rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M8 21h8M12 17v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            Multiviewer
+          </button>
           <button onClick={() => setDrawerOpen(true)} style={{
             background: "#1a2030", border: "1px solid #2a3447", borderRadius: "6px", color: "#d1d5db",
             fontSize: 11, fontWeight: 600, padding: "6px 14px", cursor: "pointer", fontFamily: "inherit",
