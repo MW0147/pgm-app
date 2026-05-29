@@ -19,13 +19,13 @@ const FeedTile = ({ cam, label, accent, videoRef, isLarge }) => (
     position: "relative", background: "#0a0d11", overflow: "hidden",
     border: `2px solid ${accent || "#1a2535"}`,
     borderRadius: isLarge ? "8px" : "6px",
-    height: "100%",
+    aspectRatio: "16/9",
     boxShadow: accent ? `0 0 20px ${accent}28` : "none",
     transition: "border-color 0.15s",
   }}>
     <video ref={videoRef} autoPlay playsInline muted style={{
       position: "absolute", inset: 0, width: "100%", height: "100%",
-      objectFit: cam?.isPortrait ? "contain" : "cover",
+      objectFit: "contain",
       display: cam?.hasStream ? "block" : "none",
       background: "#000",
     }} />
@@ -295,7 +295,6 @@ export default function Multiviewer() {
               display: "grid",
               gridTemplateColumns: `repeat(${Math.max(cameras.length, 1)}, 1fr)`,
               gap: 6,
-              height: "20vh",
             }}>
               {cameras.map(cam => {
                 const tallyState = tally[cam.id];
@@ -313,27 +312,20 @@ export default function Multiviewer() {
           </section>
         )}
 
-        {/* PVW + PGM — fill remaining space */}
-        <section style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7, flexShrink: 0 }}>
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 6px rgba(34,197,94,0.6)" }} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: "#22c55e", letterSpacing: "0.06em", textTransform: "uppercase" }}>Preview</span>
+        {/* PVW + PGM — 16:9 frames, ~25% smaller than full-width, centered */}
+        <section style={{ display: "flex", justifyContent: "center", alignItems: "flex-start", gap: 16, flexShrink: 0 }}>
+          {[
+            { cam: previewCam, label: "PVW", accent: "#22c55e", dotColor: "rgba(34,197,94,0.6)", ref: el => { pvwRef.current = el; }, title: "Preview" },
+            { cam: programCam, label: "PGM", accent: "#ef4444", dotColor: "rgba(239,68,68,0.6)", ref: el => { pgmRef.current = el; }, title: "Program" },
+          ].map(({ cam, label, accent, dotColor, ref, title }) => (
+            <div key={label} style={{ width: "38%", display: "flex", flexDirection: "column", gap: 7 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: accent, boxShadow: `0 0 6px ${dotColor}` }} />
+                <span style={{ fontSize: 10, fontWeight: 700, color: accent, letterSpacing: "0.06em", textTransform: "uppercase" }}>{title}</span>
+              </div>
+              <FeedTile cam={cam} label={label} accent={accent} isLarge videoRef={ref} />
             </div>
-            <div style={{ flex: 1, minHeight: 0 }}>
-              <FeedTile cam={previewCam} label="PVW" accent="#22c55e" isLarge videoRef={el => { pvwRef.current = el; }} />
-            </div>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7, flexShrink: 0 }}>
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", boxShadow: "0 0 6px rgba(239,68,68,0.6)" }} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: "#ef4444", letterSpacing: "0.06em", textTransform: "uppercase" }}>Program</span>
-            </div>
-            <div style={{ flex: 1, minHeight: 0 }}>
-              <FeedTile cam={programCam} label="PGM" accent="#ef4444" isLarge videoRef={el => { pgmRef.current = el; }} />
-            </div>
-          </div>
+          ))}
         </section>
 
       </main>
