@@ -34,7 +34,7 @@ const CameraFeed = ({ cam, isProgram, isPreview, onClick, videoRef, onVideoLoad 
       position: "relative", background: "#0d1117",
       border: isProgram ? "2px solid #ef4444" : isPreview ? "2px solid #22c55e" : "2px solid #1f2937",
       borderRadius: "8px", cursor: cam.connected ? "pointer" : "default",
-      overflow: "hidden", aspectRatio: "16/9",
+      overflow: "hidden", height: "100%",
       transition: "border-color 0.15s, box-shadow 0.15s",
       boxShadow: isProgram
         ? "0 0 0 1px rgba(239,68,68,0.15), 0 4px 24px rgba(239,68,68,0.12)"
@@ -97,8 +97,8 @@ const CameraFeed = ({ cam, isProgram, isPreview, onClick, videoRef, onVideoLoad 
 );
 
 const Monitor = ({ cam, isProgram, videoRef }) => (
-  <div>
-    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
+  <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8, flexShrink: 0 }}>
       <div style={{
         width: 7, height: 7, borderRadius: "50%",
         background: isProgram ? "#ef4444" : "#22c55e",
@@ -109,13 +109,13 @@ const Monitor = ({ cam, isProgram, videoRef }) => (
       </span>
     </div>
     <div style={{
-      aspectRatio: "16/9", background: "#0d1117",
+      flex: 1, minHeight: 0, background: "#0d1117",
       border: `2px solid ${isProgram ? "#ef4444" : "#22c55e"}`,
       borderRadius: "8px", position: "relative", overflow: "hidden",
       boxShadow: isProgram ? "0 0 32px rgba(239,68,68,0.12)" : "0 0 24px rgba(34,197,94,0.08)",
     }}>
       <video ref={videoRef} autoPlay playsInline muted style={{
-        width: "100%", height: "100%",
+        position: "absolute", inset: 0, width: "100%", height: "100%",
         objectFit: cam?.isPortrait ? "contain" : "cover",
         display: cam?.hasStream ? "block" : "none",
         background: "#000",
@@ -255,6 +255,13 @@ export default function Director() {
     saveState({ program, preview, cameraSlots, roomId });
   }, [program, preview, cameraSlots, roomId]);
 
+  // ── Sync slot config to server so multiviewer can see all cameras ───────────
+  useEffect(() => {
+    if (roomId && wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "set-slots", slots: cameraSlots }));
+    }
+  }, [cameraSlots, roomId]);
+
   // ── Warn on refresh during live show ──────────────────────────────────────
   useEffect(() => {
     const onBeforeUnload = (e) => {
@@ -356,6 +363,11 @@ export default function Director() {
 
           case "room-assigned": {
             setRoomId(msg.roomId);
+            // Send current slot config to server immediately
+            const currentSlots = loadState().cameraSlots || [];
+            if (currentSlots.length > 0) {
+              ws.send(JSON.stringify({ type: "set-slots", slots: currentSlots }));
+            }
             break;
           }
 
@@ -521,7 +533,7 @@ export default function Director() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{
-      minHeight: "100vh", background: "#09090b",
+      height: "100vh", overflow: "hidden", background: "#09090b",
       fontFamily: "'DM Sans', 'Helvetica Neue', Arial, sans-serif",
       color: "#e5e7eb", display: "flex", flexDirection: "column",
     }}>
@@ -596,14 +608,14 @@ export default function Director() {
         </div>
       </header>
 
-      <main style={{ flex: 1, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
+      <main style={{ flex: 1, minHeight: 0, padding: "12px 20px", display: "flex", flexDirection: "column", gap: 10, overflow: "hidden" }}>
 
         {/* Sources — always shows all slots in order */}
         <section>
           <p style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 12 }}>
             Sources
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, height: "18vh" }}>
             {mergedCameras.map(cam => (
               <CameraFeed
                 key={cam.id}
@@ -619,10 +631,10 @@ export default function Director() {
         </section>
 
         {/* Monitors + switcher */}
-        <section style={{ display: "grid", gridTemplateColumns: "1fr 88px 1fr", gap: 16, alignItems: "start" }}>
+        <section style={{ display: "grid", gridTemplateColumns: "1fr 88px 1fr", gap: 12, flex: 1, minHeight: 0 }}>
           <Monitor cam={previewCam} isProgram={false} videoRef={el => { monitorRefs.current.preview = el; }} />
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 32 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, justifyContent: "center" }}>
             {[{ label: "Cut", action: handleCut }, { label: "Auto", action: handleCut }].map(btn => (
               <button key={btn.label} onClick={btn.action} style={{
                 width: "100%", background: "#1a2030", border: "1px solid #2a3447", borderRadius: "6px",
