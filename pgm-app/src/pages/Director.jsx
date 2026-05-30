@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { PGMWordmark } from "../PGMLogo";
 
 const SERVER_URL = "wss://pgm-server.up.railway.app";
 const BASE_URL = window.location.origin;
@@ -554,8 +555,7 @@ export default function Director() {
         padding: "0 24px", flexShrink: 0,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ef4444", boxShadow: "0 0 8px rgba(239,68,68,0.6)" }} />
-          <span style={{ fontSize: 14, fontWeight: 700, color: "#f9fafb", letterSpacing: "-0.01em" }}>PGM</span>
+          <PGMWordmark height={20} />
           <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 600, background: "#1f2937", padding: "2px 8px", borderRadius: "4px", marginLeft: 4 }}>Director</span>
         </div>
 
