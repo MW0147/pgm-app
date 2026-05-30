@@ -13,78 +13,67 @@ const getParam = (key, fallback) => {
   try { return new URLSearchParams(window.location.search).get(key) || fallback; } catch { return fallback; }
 };
 
-const slotsCacheKey = (roomId) => `pgm_mv_slots_${roomId}`;
-
-// Load cached slots for this specific room — empty array if none
-const loadCachedSlots = (roomId) => {
+// Read director's slot config from localStorage — works when on same device
+const getDirectorSlots = () => {
   try {
-    const cached = JSON.parse(localStorage.getItem(slotsCacheKey(roomId)));
-    return cached?.length ? cached : [];
-  } catch { return []; }
+    const state = JSON.parse(localStorage.getItem("pgm_show_state"));
+    return state?.cameraSlots?.length ? state.cameraSlots : null;
+  } catch { return null; }
 };
 
-// ── Camera tile — always 16:9 frame ─────────────────────────────────────────
-const Tile = ({ cam, accent, videoRef, label }) => (
-  <div style={{
-    position: "relative",
-    background: "#080b0f",
-    border: `2px solid ${accent || "#1a2535"}`,
-    borderRadius: "6px",
-    overflow: "hidden",
-    aspectRatio: "16/9",
-    boxShadow: accent ? `0 0 16px ${accent}30` : "none",
-    transition: "border-color 0.15s",
-  }}>
-    {/* Video — always contained within 16:9 frame */}
-    <video ref={videoRef} autoPlay playsInline muted style={{
-      position: "absolute", inset: 0,
-      width: "100%", height: "100%",
-      objectFit: "contain",
-      display: cam?.hasStream ? "block" : "none",
-      background: "#000",
-    }} />
-
-    {/* No signal / connecting state */}
-    {!cam?.hasStream && (
-      <div style={{
-        position: "absolute", inset: 0,
-        display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 5,
-      }}>
-        {cam?.connected ? (
-          <>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 6px rgba(34,197,94,0.6)" }} />
-            <span style={{ fontSize: 9, color: "#374151", fontWeight: 500 }}>Connecting…</span>
-          </>
-        ) : (
-          <span style={{ fontSize: 9, color: "#1f2937", fontWeight: 500 }}>No signal</span>
-        )}
-      </div>
-    )}
-
-    {/* Bottom label */}
+// ── Tile — always 16:9, no dummies ──────────────────────────────────────────
+const Tile = ({ cam, tallyState, videoRef }) => {
+  const accent = tallyState === "program" ? "#ef4444"
+               : tallyState === "preview" ? "#22c55e"
+               : null;
+  return (
     <div style={{
-      position: "absolute", bottom: 0, left: 0, right: 0,
-      padding: "14px 8px 5px",
-      background: "linear-gradient(transparent, rgba(0,0,0,0.85))",
-      display: "flex", justifyContent: "space-between", alignItems: "flex-end",
+      position: "relative", background: "#080b0f",
+      border: `2px solid ${accent || "#1a2535"}`,
+      borderRadius: "6px", overflow: "hidden",
+      aspectRatio: "16/9",
+      boxShadow: accent ? `0 0 16px ${accent}30` : "none",
+      transition: "border-color 0.15s, box-shadow 0.15s",
     }}>
-      {label && (
-        <span style={{
-          fontSize: 8, fontWeight: 700, letterSpacing: "0.1em",
-          color: accent, textTransform: "uppercase",
-          background: `${accent}22`, padding: "2px 5px", borderRadius: "3px",
-        }}>{label}</span>
+      <video ref={videoRef} autoPlay playsInline muted style={{
+        position: "absolute", inset: 0, width: "100%", height: "100%",
+        objectFit: "contain", display: cam.hasStream ? "block" : "none", background: "#000",
+      }} />
+
+      {!cam.hasStream && (
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 5 }}>
+          {cam.connected
+            ? <><div style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 6px rgba(34,197,94,0.6)" }} /><span style={{ fontSize: 9, color: "#374151", fontWeight: 500 }}>Connecting…</span></>
+            : <span style={{ fontSize: 9, color: "#1f2937", fontWeight: 500 }}>No signal</span>
+          }
+        </div>
       )}
-      {cam && (
-        <span style={{ fontSize: 9, color: "#4b5563", fontWeight: 500, marginLeft: "auto" }}>
+
+      {/* Tally badge */}
+      {accent && (
+        <div style={{
+          position: "absolute", top: 6, left: 6,
+          background: accent, color: tallyState === "program" ? "#fff" : "#000",
+          fontSize: 8, fontWeight: 700, letterSpacing: "0.1em",
+          padding: "2px 5px", borderRadius: "3px", textTransform: "uppercase",
+        }}>{tallyState === "program" ? "PGM" : "PVW"}</div>
+      )}
+
+      {/* Camera name */}
+      <div style={{
+        position: "absolute", bottom: 0, left: 0, right: 0,
+        padding: "14px 8px 5px",
+        background: "linear-gradient(transparent, rgba(0,0,0,0.85))",
+      }}>
+        <span style={{ fontSize: 9, color: accent || "#4b5563", fontWeight: 500 }}>
           {cam.name}{cam.label ? ` · ${cam.label}` : ""}
         </span>
-      )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
-// ── Monitor — always 16:9 frame, slightly smaller than half-width ────────────
+// ── Monitor — always 16:9 ────────────────────────────────────────────────────
 const Monitor = ({ cam, isProgram, videoRef }) => {
   const accent = isProgram ? "#ef4444" : "#22c55e";
   return (
@@ -96,12 +85,9 @@ const Monitor = ({ cam, isProgram, videoRef }) => {
         </span>
       </div>
       <div style={{
-        position: "relative",
-        background: "#080b0f",
-        border: `2px solid ${accent}`,
-        borderRadius: "8px",
-        overflow: "hidden",
-        aspectRatio: "16/9",
+        position: "relative", background: "#080b0f",
+        border: `2px solid ${accent}`, borderRadius: "8px",
+        overflow: "hidden", aspectRatio: "16/9",
         boxShadow: `0 0 24px ${accent}20`,
       }}>
         <video ref={videoRef} autoPlay playsInline muted style={{
@@ -116,7 +102,6 @@ const Monitor = ({ cam, isProgram, videoRef }) => {
             </span>
           </div>
         )}
-        {/* Badge */}
         <div style={{
           position: "absolute", top: 8, left: 8,
           background: accent, color: isProgram ? "#fff" : "#000",
@@ -132,27 +117,24 @@ const Monitor = ({ cam, isProgram, videoRef }) => {
 export default function Multiviewer() {
   const roomId = getParam("room", null);
 
-  // Slots: all configured cameras (from director config)
-  // Start with room-specific cached slots so grid persists across refreshes
-  const [slots, setSlots] = useState(() => loadCachedSlots(roomId || ""));
-
-  // Live status per camera id
-  const [liveStatus, setLiveStatus] = useState(new Map());
-
-  // Tally: cameraId -> "program" | "preview" | "idle"
+  // Slots come from two places, in priority order:
+  // 1. localStorage pgm_show_state (same device as director — instant)
+  // 2. room-slots message from server (different device — arrives after connect)
+  // Never show dummy/placeholder slots.
+  const [slots, setSlots] = useState(() => getDirectorSlots() || []);
+  const [liveStatus, setLiveStatus] = useState(new Map()); // id -> { connected, hasStream }
   const [tally, setTally] = useState({});
-
   const [wsStatus, setWsStatus] = useState("connecting");
   const [clock, setClock] = useState(new Date());
 
   const wsRef           = useRef(null);
   const peerConnections = useRef(new Map());
   const streamsRef      = useRef(new Map());
-  const tileRefs        = useRef(new Map()); // cameraId -> tile video el
+  const tileRefs        = useRef(new Map());
   const pgmRef          = useRef(null);
   const pvwRef          = useRef(null);
 
-  // Merged view: always show ALL slots, overlay live status
+  // Merged: slots with live status overlaid — only real configured cameras
   const cameras = slots.map(slot => ({
     ...slot,
     ...(liveStatus.get(slot.id) || { connected: false, hasStream: false }),
@@ -167,21 +149,7 @@ export default function Multiviewer() {
     return () => clearInterval(t);
   }, []);
 
-  // ── Apply stream to a video element ───────────────────────────────────────
-  const applyStream = useCallback((cameraId) => {
-    const stream = streamsRef.current.get(cameraId);
-    if (!stream) return;
-    const tile = tileRefs.current.get(cameraId);
-    if (tile) tile.srcObject = stream;
-    // Update monitors if assigned
-    setTally(prev => {
-      if (prev[cameraId] === "program" && pgmRef.current) pgmRef.current.srcObject = stream;
-      if (prev[cameraId] === "preview" && pvwRef.current) pvwRef.current.srcObject = stream;
-      return prev;
-    });
-  }, []);
-
-  // Reapply to monitors when tally changes
+  // ── Update monitors when tally changes ────────────────────────────────────
   useEffect(() => {
     Object.entries(tally).forEach(([cameraId, state]) => {
       const stream = streamsRef.current.get(cameraId);
@@ -202,13 +170,21 @@ export default function Multiviewer() {
     pc.ontrack = (event) => {
       const stream = event.streams[0] || new MediaStream([event.track]);
       streamsRef.current.set(cameraId, stream);
+
+      const tile = tileRefs.current.get(cameraId);
+      if (tile) tile.srcObject = stream;
+
+      setTally(prev => {
+        if (prev[cameraId] === "program" && pgmRef.current) pgmRef.current.srcObject = stream;
+        if (prev[cameraId] === "preview" && pvwRef.current) pvwRef.current.srcObject = stream;
+        return prev;
+      });
+
       setLiveStatus(prev => {
         const next = new Map(prev);
         next.set(cameraId, { ...(next.get(cameraId) || {}), hasStream: true });
         return next;
       });
-      // Apply stream after state updates
-      setTimeout(() => applyStream(cameraId), 50);
     };
 
     pc.onconnectionstatechange = () => {
@@ -224,7 +200,7 @@ export default function Multiviewer() {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     wsRef.current?.send(JSON.stringify({ type: "sdp-offer", to: cameraId, sdp: offer }));
-  }, [applyStream]);
+  }, []);
 
   // ── WebSocket ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -236,8 +212,6 @@ export default function Multiviewer() {
 
       ws.onopen = () => {
         setWsStatus("connected");
-        // Clear any stale generic cache from old versions
-        try { localStorage.removeItem("pgm_mv_slots"); } catch {}
         ws.send(JSON.stringify({ type: "register", role: "viewer", roomId }));
       };
 
@@ -248,23 +222,13 @@ export default function Multiviewer() {
         const msg = JSON.parse(event.data);
         switch (msg.type) {
 
-          // Full slot config from director — replace all slots
+          // Authoritative slot list from director — always trust this
           case "room-slots": {
-            if (msg.slots?.length) {
-              setSlots(msg.slots);
-              try { localStorage.setItem(slotsCacheKey(roomId), JSON.stringify(msg.slots)); } catch {}
-            }
+            if (msg.slots?.length) setSlots(msg.slots);
             break;
           }
 
-          // A camera came online — update its live status
           case "camera-connected": {
-            // If this camera isn't in our slot list yet, add it
-            setSlots(prev => {
-              const exists = prev.find(s => s.id === msg.cameraId);
-              if (!exists) return [...prev, { id: msg.cameraId, name: msg.name, label: msg.label }];
-              return prev;
-            });
             setLiveStatus(prev => {
               const next = new Map(prev);
               next.set(msg.cameraId, { ...(next.get(msg.cameraId) || {}), connected: true });
@@ -287,7 +251,9 @@ export default function Multiviewer() {
           }
 
           case "camera-renamed": {
-            setSlots(prev => prev.map(s => s.id === msg.cameraId ? { ...s, name: msg.name, label: msg.label } : s));
+            setSlots(prev => prev.map(s =>
+              s.id === msg.cameraId ? { ...s, name: msg.name, label: msg.label } : s
+            ));
             break;
           }
 
@@ -319,8 +285,6 @@ export default function Multiviewer() {
       peerConnections.current.forEach(pc => pc.close());
     };
   }, [roomId, initiatePeerConnection]);
-
-  const connectedCount = cameras.filter(c => c.connected).length;
 
   const formatClock = (d) => d.toLocaleTimeString("en-US", {
     hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
@@ -361,7 +325,7 @@ export default function Multiviewer() {
               boxShadow: wsStatus === "connected" ? "0 0 5px rgba(34,197,94,0.6)" : "none",
             }} />
             <span style={{ fontSize: 10, color: "#6b7280", fontWeight: 500 }}>
-              {connectedCount} of {cameras.length} online
+              {cameras.filter(c => c.connected).length} of {cameras.length} online
             </span>
           </div>
           <span style={{ fontSize: 13, fontWeight: 700, color: "#d1d5db", fontVariantNumeric: "tabular-nums", fontFamily: "monospace", letterSpacing: "0.05em" }}>
@@ -370,40 +334,42 @@ export default function Multiviewer() {
         </div>
       </header>
 
-      {/* Body — no scroll, everything fits */}
+      {/* Body */}
       <main style={{
         flex: 1, minHeight: 0, overflow: "hidden",
         padding: "12px 16px 16px", display: "flex", flexDirection: "column", gap: 12,
       }}>
 
-        {/* Sources — always 4 columns, always all slots, 16:9 tiles */}
-        <section style={{ flexShrink: 0 }}>
-          <p style={{ fontSize: 9, fontWeight: 600, color: "#1f2937", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8 }}>
-            Sources
-          </p>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 6,
-          }}>
-            {/* Always show 4 slots — pad with empties if fewer configured */}
-            {[...cameras, ...Array(Math.max(0, 4 - cameras.length)).fill(null)].map((cam, i) => {
-              const tallyState = cam ? tally[cam.id] : null;
-              const accent = tallyState === "program" ? "#ef4444" : tallyState === "preview" ? "#22c55e" : null;
-              return (
+        {/* Sources — only shown when we have real slots */}
+        {cameras.length > 0 ? (
+          <section style={{ flexShrink: 0 }}>
+            <p style={{ fontSize: 9, fontWeight: 600, color: "#1f2937", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8 }}>Sources</p>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: `repeat(${cameras.length}, 1fr)`,
+              gap: 6,
+            }}>
+              {cameras.map(cam => (
                 <Tile
-                  key={cam?.id || `empty-${i}`}
+                  key={cam.id}
                   cam={cam}
-                  accent={accent}
-                  label={tallyState === "program" ? "PGM" : tallyState === "preview" ? "PVW" : null}
-                  videoRef={el => cam && el && tileRefs.current.set(cam.id, el)}
+                  tallyState={tally[cam.id] || "idle"}
+                  videoRef={el => el && tileRefs.current.set(cam.id, el)}
                 />
-              );
-            })}
+              ))}
+            </div>
+          </section>
+        ) : (
+          /* Waiting state — shown on different-device load before room-slots arrives */
+          <div style={{ flexShrink: 0, padding: "20px 0 8px", display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: wsStatus === "connected" ? "#f59e0b" : "#374151" }} />
+            <span style={{ fontSize: 11, color: "#374151", fontWeight: 500 }}>
+              {wsStatus === "connected" ? "Waiting for director to configure cameras…" : "Connecting to show…"}
+            </span>
           </div>
-        </section>
+        )}
 
-        {/* PVW + PGM — 16:9 frames, centred, ~38% wide each */}
+        {/* PVW + PGM */}
         <section style={{
           flex: 1, minHeight: 0,
           display: "flex", justifyContent: "center", alignItems: "flex-start", gap: 16,
