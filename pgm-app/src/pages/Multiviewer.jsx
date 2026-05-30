@@ -31,7 +31,7 @@ const Tile = ({ cam, tallyState, videoRef }) => {
       position: "relative", background: "#080b0f",
       border: `2px solid ${accent || "#1a2535"}`,
       borderRadius: "6px", overflow: "hidden",
-      aspectRatio: "16/9",
+      height: "100%",
       boxShadow: accent ? `0 0 16px ${accent}30` : "none",
       transition: "border-color 0.15s, box-shadow 0.15s",
     }}>
