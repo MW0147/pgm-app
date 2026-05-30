@@ -13,21 +13,14 @@ const getParam = (key, fallback) => {
   try { return new URLSearchParams(window.location.search).get(key) || fallback; } catch { return fallback; }
 };
 
-const SLOTS_CACHE_KEY = "pgm_mv_slots";
+const slotsCacheKey = (roomId) => `pgm_mv_slots_${roomId}`;
 
-// Default placeholder slots shown before room-slots arrives
-const DEFAULT_SLOTS = [
-  { id: "__ph1", name: "Cam 1", label: "" },
-  { id: "__ph2", name: "Cam 2", label: "" },
-  { id: "__ph3", name: "Cam 3", label: "" },
-  { id: "__ph4", name: "Cam 4", label: "" },
-];
-
-const loadCachedSlots = () => {
+// Load cached slots for this specific room — empty array if none
+const loadCachedSlots = (roomId) => {
   try {
-    const cached = JSON.parse(localStorage.getItem(SLOTS_CACHE_KEY));
-    return cached?.length ? cached : DEFAULT_SLOTS;
-  } catch { return DEFAULT_SLOTS; }
+    const cached = JSON.parse(localStorage.getItem(slotsCacheKey(roomId)));
+    return cached?.length ? cached : [];
+  } catch { return []; }
 };
 
 // ── Camera tile — always 16:9 frame ─────────────────────────────────────────
@@ -140,8 +133,8 @@ export default function Multiviewer() {
   const roomId = getParam("room", null);
 
   // Slots: all configured cameras (from director config)
-  // Start with cached/default so grid shows immediately even before server responds
-  const [slots, setSlots] = useState(loadCachedSlots);
+  // Start with room-specific cached slots so grid persists across refreshes
+  const [slots, setSlots] = useState(() => loadCachedSlots(roomId || ""));
 
   // Live status per camera id
   const [liveStatus, setLiveStatus] = useState(new Map());
@@ -243,6 +236,8 @@ export default function Multiviewer() {
 
       ws.onopen = () => {
         setWsStatus("connected");
+        // Clear any stale generic cache from old versions
+        try { localStorage.removeItem("pgm_mv_slots"); } catch {}
         ws.send(JSON.stringify({ type: "register", role: "viewer", roomId }));
       };
 
@@ -253,11 +248,11 @@ export default function Multiviewer() {
         const msg = JSON.parse(event.data);
         switch (msg.type) {
 
-          // Full slot config from director — replace placeholder slots
+          // Full slot config from director — replace all slots
           case "room-slots": {
             if (msg.slots?.length) {
               setSlots(msg.slots);
-              try { localStorage.setItem(SLOTS_CACHE_KEY, JSON.stringify(msg.slots)); } catch {}
+              try { localStorage.setItem(slotsCacheKey(roomId), JSON.stringify(msg.slots)); } catch {}
             }
             break;
           }
