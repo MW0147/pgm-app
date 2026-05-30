@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { PGMWordmark } from "../PGMLogo";
 
 const SERVER_URL = "wss://pgm-server.up.railway.app";
 const ICE_SERVERS = [
@@ -361,8 +362,7 @@ export default function Multiviewer() {
         padding: "0 20px",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", boxShadow: "0 0 6px rgba(239,68,68,0.6)" }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: "#f9fafb", letterSpacing: "-0.01em" }}>PGM</span>
+          <PGMWordmark height={18} />
           <span style={{ fontSize: 10, color: "#6b7280", fontWeight: 600, background: "#141a24", padding: "2px 8px", borderRadius: "4px", marginLeft: 2 }}>
             Multiviewer
           </span>
