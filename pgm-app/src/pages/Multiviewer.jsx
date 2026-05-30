@@ -77,19 +77,12 @@ const Tile = ({ cam, tallyState, videoRef }) => {
 const Monitor = ({ cam, isProgram, videoRef }) => {
   const accent = isProgram ? "#ef4444" : "#22c55e";
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <div style={{ width: 6, height: 6, borderRadius: "50%", background: accent, boxShadow: `0 0 6px ${accent}99` }} />
-        <span style={{ fontSize: 10, fontWeight: 700, color: accent, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-          {isProgram ? "Program" : "Preview"}
-        </span>
-      </div>
-      <div style={{
-        position: "relative", background: "#080b0f",
-        border: `2px solid ${accent}`, borderRadius: "8px",
-        overflow: "hidden", aspectRatio: "16/9",
-        boxShadow: `0 0 24px ${accent}20`,
-      }}>
+    <div style={{
+      position: "relative", background: "#080b0f",
+      border: `2px solid ${accent}`, borderRadius: "8px",
+      overflow: "hidden", height: "100%",
+      boxShadow: `0 0 24px ${accent}20`,
+    }}>
         <video ref={videoRef} autoPlay playsInline muted style={{
           position: "absolute", inset: 0, width: "100%", height: "100%",
           objectFit: "contain", background: "#000",
@@ -344,20 +337,27 @@ export default function Multiviewer() {
         {cameras.length > 0 ? (
           <section style={{ flexShrink: 0 }}>
             <p style={{ fontSize: 9, fontWeight: 600, color: "#1f2937", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8 }}>Sources</p>
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${cameras.length}, 1fr)`,
-              gap: 6,
-            }}>
-              {cameras.map(cam => (
-                <Tile
-                  key={cam.id}
-                  cam={cam}
-                  tallyState={tally[cam.id] || "idle"}
-                  videoRef={el => el && tileRefs.current.set(cam.id, el)}
-                />
-              ))}
-            </div>
+            {(() => {
+              const rows = Math.ceil(cameras.length / 4);
+              const rowH = 22; // vh per row
+              return (
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4, 1fr)",
+                  gridAutoRows: `${rowH}vh`,
+                  gap: 6,
+                }}>
+                  {cameras.map(cam => (
+                    <Tile
+                      key={cam.id}
+                      cam={cam}
+                      tallyState={tally[cam.id] || "idle"}
+                      videoRef={el => el && tileRefs.current.set(cam.id, el)}
+                    />
+                  ))}
+                </div>
+              );
+            })()}
           </section>
         ) : (
           /* Waiting state — shown on different-device load before room-slots arrives */
@@ -369,16 +369,28 @@ export default function Multiviewer() {
           </div>
         )}
 
-        {/* PVW + PGM */}
+        {/* PVW + PGM — fill remaining space */}
         <section style={{
           flex: 1, minHeight: 0,
-          display: "flex", justifyContent: "center", alignItems: "flex-start", gap: 16,
+          display: "flex", justifyContent: "center", alignItems: "stretch", gap: 16,
         }}>
-          <div style={{ width: "38%", minWidth: 0 }}>
-            <Monitor cam={previewCam} isProgram={false} videoRef={el => { pvwRef.current = el; }} />
+          <div style={{ width: "38%", minWidth: 0, display: "flex", flexDirection: "column", gap: 7 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 6px rgba(34,197,94,0.6)" }} />
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#22c55e", letterSpacing: "0.06em", textTransform: "uppercase" }}>Preview</span>
+            </div>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <Monitor cam={previewCam} isProgram={false} videoRef={el => { pvwRef.current = el; }} />
+            </div>
           </div>
-          <div style={{ width: "38%", minWidth: 0 }}>
-            <Monitor cam={programCam} isProgram={true} videoRef={el => { pgmRef.current = el; }} />
+          <div style={{ width: "38%", minWidth: 0, display: "flex", flexDirection: "column", gap: 7 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", boxShadow: "0 0 6px rgba(239,68,68,0.6)" }} />
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#ef4444", letterSpacing: "0.06em", textTransform: "uppercase" }}>Program</span>
+            </div>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <Monitor cam={programCam} isProgram={true} videoRef={el => { pgmRef.current = el; }} />
+            </div>
           </div>
         </section>
 
