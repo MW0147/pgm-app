@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { PGMWordmark } from "../PGMLogo";
 
 const SERVER_URL = "wss://pgm-server.up.railway.app";
 const ICE_SERVERS = [
@@ -211,7 +212,7 @@ export default function Camera() {
             boxShadow: wsStatus === "connected" ? "0 0 6px rgba(34,197,94,0.7)" : "none",
             transition: "background 0.3s",
           }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: "#f9fafb", letterSpacing: "-0.01em" }}>PGM</span>
+          <PGMWordmark height={16} />
         </div>
         {s.badge && (
           <div style={{
