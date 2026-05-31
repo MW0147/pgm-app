@@ -88,8 +88,7 @@ const ChannelStrip = ({ cam, volume, muted, solo, isProgram, onVolume, onMute, o
       border: `1px solid ${isProgram ? "rgba(239,68,68,0.3)" : "#1f2937"}`,
       borderRadius: "10px", minWidth: 80, maxWidth: 100,
       boxShadow: isProgram ? "0 0 16px rgba(239,68,68,0.08)" : "none",
-      transition: "border-color 0.15s, opacity 0.15s",
-      opacity: muted ? 0.5 : 1,
+      transition: "border-color 0.15s",
     }}>
       <div style={{
         width: 8, height: 8, borderRadius: "50%",
@@ -102,27 +101,34 @@ const ChannelStrip = ({ cam, volume, muted, solo, isProgram, onVolume, onMute, o
 
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, width: "100%" }}>
         <span style={{ fontSize: 9, color: "#4b5563", fontWeight: 500 }}>{Math.round(volume * 100)}</span>
-        <input type="range" min={0} max={1} step={0.01} value={volume}
-          onChange={e => onVolume(parseFloat(e.target.value))}
-          style={{ writingMode: "vertical-lr", direction: "rtl", height: 100, width: 20, cursor: "pointer", accentColor: isProgram ? "#ef4444" : "#22c55e" }} />
+        {/* Rotate a horizontal slider — far more reliable cross-browser than writingMode */}
+        <div style={{ height: 110, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <input type="range" min={0} max={1} step={0.01} value={volume}
+            onChange={e => onVolume(parseFloat(e.target.value))}
+            style={{
+              width: 100, cursor: "pointer",
+              transform: "rotate(-90deg)",
+              accentColor: isProgram ? "#ef4444" : "#22c55e",
+            }} />
+        </div>
       </div>
 
       <button onClick={onSolo} style={{
-        width: "100%", padding: "4px 0",
-        background: solo ? "rgba(245,158,11,0.2)" : "transparent",
-        border: `1px solid ${solo ? "#f59e0b" : "#1f2937"}`,
-        borderRadius: "4px", color: solo ? "#f59e0b" : "#4b5563",
-        fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-        cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+        width: "100%", padding: "6px 0",
+        background: solo ? "#f59e0b" : "#1a2030",
+        border: `1px solid ${solo ? "#f59e0b" : "#2a3447"}`,
+        borderRadius: "4px", color: solo ? "#000" : "#6b7280",
+        fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+        cursor: "pointer", fontFamily: "inherit", transition: "all 0.1s",
       }}>S</button>
 
       <button onClick={onMute} style={{
-        width: "100%", padding: "4px 0",
-        background: muted ? "rgba(239,68,68,0.2)" : "transparent",
-        border: `1px solid ${muted ? "#ef4444" : "#1f2937"}`,
-        borderRadius: "4px", color: muted ? "#ef4444" : "#4b5563",
-        fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-        cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+        width: "100%", padding: "6px 0",
+        background: muted ? "#ef4444" : "#1a2030",
+        border: `1px solid ${muted ? "#ef4444" : "#2a3447"}`,
+        borderRadius: "4px", color: muted ? "#fff" : "#6b7280",
+        fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+        cursor: "pointer", fontFamily: "inherit", transition: "all 0.1s",
       }}>M</button>
 
       <div style={{ textAlign: "center" }}>
@@ -297,10 +303,13 @@ export default function AudioConsole() {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     peerConnections.current.set(cameraId, pc);
 
-    // Audio only — no video needed for audio console
+    // Add both transceivers to match the camera's full stream offer (video + audio)
+    // We receive both but only wire the audio track into the audio graph
+    pc.addTransceiver("video", { direction: "recvonly" });
     pc.addTransceiver("audio", { direction: "recvonly" });
 
     pc.ontrack = (event) => {
+      // Ignore video — audio console doesn't display video
       if (event.track.kind !== "audio") return;
       const stream = event.streams[0] || new MediaStream([event.track]);
       setLiveStatus(prev => {
@@ -502,9 +511,11 @@ export default function AudioConsole() {
                 <span style={{ fontSize: 9, fontWeight: 700, color: "#6b7280", letterSpacing: "0.1em", textTransform: "uppercase" }}>Master</span>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
                   <span style={{ fontSize: 9, color: "#4b5563", fontWeight: 500 }}>{Math.round(masterVolume * 100)}</span>
+                  <div style={{ height: 110, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <input type="range" min={0} max={1} step={0.01} value={masterVolume}
                     onChange={e => handleMasterVolume(parseFloat(e.target.value))}
-                    style={{ writingMode: "vertical-lr", direction: "rtl", height: 100, width: 20, cursor: "pointer", accentColor: "#9ca3af" }} />
+                    style={{ width: 100, cursor: "pointer", transform: "rotate(-90deg)", accentColor: "#9ca3af" }} />
+                </div>
                 </div>
                 <button onClick={handleMasterMute} style={{
                   width: "100%", padding: "4px 0",
