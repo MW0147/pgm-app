@@ -247,6 +247,15 @@ export default function Director() {
   const monitorRefs = useRef({ program: null, preview: null });
   const streamsRef = useRef(new Map()); // cameraId -> MediaStream (source of truth for streams)
 
+  // ── Audio ──────────────────────────────────────────────────────────────────
+  // AudioContext is created on first user interaction (browser autoplay policy)
+  const audioCtxRef   = useRef(null);
+  const gainNodesRef  = useRef(new Map()); // cameraId -> GainNode
+  const audioSourcesRef = useRef(new Map()); // cameraId -> MediaStreamAudioSourceNode
+  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [masterMuted, setMasterMuted]   = useState(false);
+  const masterGainRef = useRef(null);
+
   // ── Merged view: slots + live status ───────────────────────────────────────
   const mergedCameras = cameraSlots.map(slot => ({
     ...slot,
@@ -257,6 +266,59 @@ export default function Director() {
   useEffect(() => {
     saveState({ program, preview, cameraSlots, roomId });
   }, [program, preview, cameraSlots, roomId]);
+
+  // ── Initialise AudioContext on first user interaction ──────────────────────
+  const enableAudio = useCallback(() => {
+    if (audioCtxRef.current) return;
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtxRef.current = ctx;
+    // Master gain node — controls overall monitoring volume
+    const master = ctx.createGain();
+    master.gain.value = 1;
+    master.connect(ctx.destination);
+    masterGainRef.current = master;
+    setAudioEnabled(true);
+
+    // Wire up any streams that arrived before audio was enabled
+    streamsRef.current.forEach((stream, cameraId) => {
+      wireAudio(cameraId, stream, ctx, master);
+    });
+  }, []);
+
+  // ── Wire an audio track into the graph ────────────────────────────────────
+  const wireAudio = useCallback((cameraId, stream, ctx, master) => {
+    const audioTracks = stream.getAudioTracks();
+    if (!audioTracks.length) return;
+    const existingCtx = ctx || audioCtxRef.current;
+    const existingMaster = master || masterGainRef.current;
+    if (!existingCtx || !existingMaster) return;
+
+    // Avoid double-wiring
+    if (audioSourcesRef.current.has(cameraId)) return;
+
+    const source = existingCtx.createMediaStreamSource(stream);
+    const gain = existingCtx.createGain();
+    gain.gain.value = 0; // start silent — program routing controls this
+    source.connect(gain);
+    gain.connect(existingMaster);
+
+    gainNodesRef.current.set(cameraId, gain);
+    audioSourcesRef.current.set(cameraId, source);
+  }, []);
+
+  // ── Route program audio: program camera full gain, all others silent ───────
+  useEffect(() => {
+    if (!audioEnabled || masterMuted) return;
+    gainNodesRef.current.forEach((gain, cameraId) => {
+      gain.gain.value = cameraId === program ? 1 : 0;
+    });
+  }, [program, audioEnabled, masterMuted]);
+
+  // ── Master mute ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!masterGainRef.current) return;
+    masterGainRef.current.gain.value = masterMuted ? 0 : 1;
+  }, [masterMuted]);
 
   // ── Sync slot config to server so multiviewer can see all cameras ───────────
   useEffect(() => {
@@ -303,6 +365,7 @@ export default function Director() {
     peerConnections.current.set(cameraId, pc);
 
     pc.addTransceiver("video", { direction: "recvonly" });
+    pc.addTransceiver("audio", { direction: "recvonly" });
 
     pc.ontrack = (event) => {
       console.log(`[PGM] Track received from ${cameraId}`);
@@ -310,6 +373,19 @@ export default function Director() {
 
       // Store stream as source of truth
       streamsRef.current.set(cameraId, stream);
+
+      // Wire audio if AudioContext is already running
+      if (audioCtxRef.current) {
+        wireAudio(cameraId, stream, null, null);
+        // If this is the program camera, give it full gain immediately
+        setProgram(prog => {
+          if (prog === cameraId) {
+            const gain = gainNodesRef.current.get(cameraId);
+            if (gain && !masterMuted) gain.gain.value = 1;
+          }
+          return prog;
+        });
+      }
 
       // Update tile video element
       const tileVideo = videoRefs.current.get(cameraId);
@@ -580,6 +656,44 @@ export default function Director() {
             </div>
           )}
 
+          {/* Master mute / enable audio */}
+          <button
+            onClick={audioEnabled ? () => setMasterMuted(m => !m) : enableAudio}
+            title={!audioEnabled ? "Enable audio monitoring" : masterMuted ? "Unmute" : "Mute program audio"}
+            style={{
+              background: masterMuted ? "rgba(239,68,68,0.08)" : "#1a2030",
+              border: `1px solid ${masterMuted ? "rgba(239,68,68,0.3)" : "#2a3447"}`,
+              borderRadius: "6px",
+              color: masterMuted ? "#ef4444" : audioEnabled ? "#d1d5db" : "#6b7280",
+              fontSize: 11, fontWeight: 600, padding: "6px 14px", cursor: "pointer",
+              fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6,
+              transition: "all 0.15s",
+            }}
+          >
+            {audioEnabled ? (
+              masterMuted ? (
+                // Muted speaker icon
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                  <path d="M11 5L6 9H2v6h4l5 4V5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                  <path d="M23 9l-6 6M17 9l6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              ) : (
+                // Unmuted speaker icon
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                  <path d="M11 5L6 9H2v6h4l5 4V5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                  <path d="M15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              )
+            ) : (
+              // Headphones icon — click to enable
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                <path d="M3 18v-6a9 9 0 0118 0v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3v5zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3v5z" stroke="currentColor" strokeWidth="1.5"/>
+              </svg>
+            )}
+            {!audioEnabled ? "Audio" : masterMuted ? "Unmute" : "Mute"}
+          </button>
+
           <button
             onClick={() => roomId && window.open(`${window.location.origin}/multiviewer?room=${roomId}`, "_blank")}
             disabled={!roomId}
@@ -596,6 +710,25 @@ export default function Director() {
               <path d="M8 21h8M12 17v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
             Multiviewer
+          </button>
+
+          <button
+            onClick={() => roomId && window.open(`${window.location.origin}/audio?room=${roomId}`, "_blank")}
+            disabled={!roomId}
+            title={roomId ? "Open Audio Console" : "Connecting…"}
+            style={{
+              background: "#1a2030", border: "1px solid #2a3447", borderRadius: "6px", color: roomId ? "#d1d5db" : "#374151",
+              fontSize: 11, fontWeight: 600, padding: "6px 14px", cursor: roomId ? "pointer" : "default",
+              fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6,
+              transition: "color 0.15s",
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+              <path d="M9 18V5l12-2v13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="6" cy="18" r="3" stroke="currentColor" strokeWidth="1.5"/>
+              <circle cx="18" cy="16" r="3" stroke="currentColor" strokeWidth="1.5"/>
+            </svg>
+            Audio
           </button>
           <button onClick={() => setDrawerOpen(true)} style={{
             background: "#1a2030", border: "1px solid #2a3447", borderRadius: "6px", color: "#d1d5db",
