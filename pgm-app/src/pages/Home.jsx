@@ -1,11 +1,13 @@
 import { PGMLogoFull } from "../PGMLogo";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const BASE_URL = window.location.origin;
 
 const generateId = () => "cam-" + Math.random().toString(36).slice(2, 7);
 
 export default function Home() {
+  useEffect(() => { document.title = "PGM Pro by AWSM Media Group"; }, []);
+
   const [cameras, setCameras] = useState([
     { id: generateId(), name: "Cam 1", label: "Stage Left" },
   ]);
