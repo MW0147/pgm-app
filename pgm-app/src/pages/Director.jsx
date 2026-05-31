@@ -239,6 +239,8 @@ export default function Director() {
   const [roomId, setRoomId] = useState(saved.roomId || null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  useEffect(() => { document.title = "Director | PGM Pro"; }, []);
+
   const wsRef = useRef(null);
   const peerConnections = useRef(new Map());
   const videoRefs = useRef(new Map());
