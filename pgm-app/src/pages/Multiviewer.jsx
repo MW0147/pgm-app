@@ -161,6 +161,8 @@ export default function Multiviewer() {
   const [wsStatus, setWsStatus]     = useState("connecting");
   const [clock, setClock]           = useState(new Date());
 
+  useEffect(() => { document.title = "Multiviewer | PGM Pro"; }, []);
+
   const wsRef           = useRef(null);
   const peerConnections = useRef(new Map());
   const streamsRef      = useRef(new Map());
