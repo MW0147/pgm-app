@@ -50,6 +50,8 @@ export default function Camera() {
   const [camError, setCamError]   = useState(null);
   const [wsStatus, setWsStatus]   = useState("connecting");
 
+  useEffect(() => { document.title = "Camera | PGM Pro"; }, []);
+
   const videoRef        = useRef(null);
   const streamRef       = useRef(null);
   const wsRef           = useRef(null);
