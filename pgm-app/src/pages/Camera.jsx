@@ -43,9 +43,9 @@ export default function Camera() {
   const initName  = getParam("name",  "Cam 1");
   const initLabel = getParam("label", "");
 
-  const [tally, setTally]       = useState("idle");
-  const [camName, setCamName]   = useState(initName);
-  const [camLabel, setCamLabel] = useState(initLabel);
+  const [tally, setTally]         = useState("idle");
+  const [camName, setCamName]     = useState(initName);
+  const [camLabel, setCamLabel]   = useState(initLabel);
   const [hasCamera, setHasCamera] = useState(false);
   const [camError, setCamError]   = useState(null);
   const [wsStatus, setWsStatus]   = useState("connecting");
@@ -55,9 +55,8 @@ export default function Camera() {
   const videoRef        = useRef(null);
   const streamRef       = useRef(null);
   const wsRef           = useRef(null);
-  // Support multiple simultaneous peer connections: director + any viewers
   const peerConnections = useRef(new Map()); // peerId -> RTCPeerConnection
-  const pendingOffers   = useRef(new Map()); // peerId -> sdp (queued before camera ready)
+  const pendingOffers   = useRef(new Map()); // peerId -> sdp
 
   const s = TALLY[tally];
 
@@ -65,7 +64,13 @@ export default function Camera() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false,
+        // Audio enabled with production-appropriate constraints:
+        // No echo cancellation or noise suppression — this is a camera mic, not a phone call
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
       });
       streamRef.current = stream;
       setHasCamera(true);
@@ -82,23 +87,20 @@ export default function Camera() {
       }
       pendingOffers.current.clear();
     } catch {
-      setCamError("Camera access denied. Tap 'Try again' and allow camera access.");
+      setCamError("Camera or microphone access denied. Tap 'Try again' and allow access.");
     }
   };
 
   const handleOffer = async (sdp, peerId) => {
-    // Close existing connection for this peer if any
     peerConnections.current.get(peerId)?.close();
-
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     peerConnections.current.set(peerId, pc);
 
-    // Add local camera tracks
+    // Add all tracks (video + audio) to the peer connection
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => pc.addTrack(track, streamRef.current));
     }
 
-    // Send ICE candidates back, tagged with peerId so server routes correctly
     pc.onicecandidate = (e) => {
       if (e.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: "ice-candidate", candidate: e.candidate, peerId }));
@@ -139,11 +141,8 @@ export default function Camera() {
         switch (msg.type) {
           case "sdp-offer": {
             const peerId = msg.peerId || "director";
-            if (!streamRef.current) {
-              pendingOffers.current.set(peerId, msg.sdp);
-            } else {
-              await handleOffer(msg.sdp, peerId);
-            }
+            if (!streamRef.current) pendingOffers.current.set(peerId, msg.sdp);
+            else await handleOffer(msg.sdp, peerId);
             break;
           }
           case "ice-candidate": {
