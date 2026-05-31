@@ -22,53 +22,46 @@ const getDirectorSlots = () => {
 };
 
 // ── VU Meter ─────────────────────────────────────────────────────────────────
-const VUMeter = ({ analyser, active }) => {
+const VUMeter = ({ analyserRef, active }) => {
   const canvasRef = useRef(null);
   const rafRef    = useRef(null);
 
   useEffect(() => {
-    if (!analyser || !active) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
 
     const draw = () => {
       rafRef.current = requestAnimationFrame(draw);
-      analyser.getByteFrequencyData(dataArray);
-
-      // RMS level
-      let sum = 0;
-      for (let i = 0; i < bufferLength; i++) sum += dataArray[i] * dataArray[i];
-      const rms = Math.sqrt(sum / bufferLength) / 255;
+      const analyser = analyserRef.current;
 
       const w = canvas.width;
       const h = canvas.height;
-      const level = Math.min(1, rms * 3); // scale up for visibility
 
-      ctx.clearRect(0, 0, w, h);
-
-      // Background
       ctx.fillStyle = "#0a0d11";
       ctx.fillRect(0, 0, w, h);
 
-      // Segments from bottom up
+      if (!analyser || !active) return;
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      analyser.getByteFrequencyData(dataArray);
+
+      let sum = 0;
+      for (let i = 0; i < bufferLength; i++) sum += dataArray[i] * dataArray[i];
+      const rms = Math.sqrt(sum / bufferLength) / 255;
+      const level = Math.min(1, rms * 3);
+
       const segments = 20;
       const segH = (h - segments) / segments;
       const filledSegments = Math.round(level * segments);
 
       for (let i = 0; i < segments; i++) {
         const y = h - (i + 1) * (segH + 1);
-        const filled = i < filledSegments;
-        if (!filled) {
-          ctx.fillStyle = "#1a2535";
-        } else if (i >= segments * 0.85) {
-          ctx.fillStyle = "#ef4444"; // red top
-        } else if (i >= segments * 0.7) {
-          ctx.fillStyle = "#f59e0b"; // amber
+        if (i < filledSegments) {
+          ctx.fillStyle = i >= segments * 0.85 ? "#ef4444" : i >= segments * 0.7 ? "#f59e0b" : "#22c55e";
         } else {
-          ctx.fillStyle = "#22c55e"; // green
+          ctx.fillStyle = "#1a2535";
         }
         ctx.fillRect(1, y, w - 2, segH);
       }
@@ -76,36 +69,28 @@ const VUMeter = ({ analyser, active }) => {
 
     draw();
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [analyser, active]);
+  }, [analyserRef, active]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={16}
-      height={120}
-      style={{ display: "block", borderRadius: "3px", flexShrink: 0 }}
-    />
+    <canvas ref={canvasRef} width={16} height={120}
+      style={{ display: "block", borderRadius: "3px", flexShrink: 0 }} />
   );
 };
 
 // ── Channel Strip ─────────────────────────────────────────────────────────────
-const ChannelStrip = ({ cam, volume, muted, solo, isProgram, onVolume, onMute, onSolo, analyser }) => {
+const ChannelStrip = ({ cam, volume, muted, solo, isProgram, onVolume, onMute, onSolo, analyserRef }) => {
   const accent = isProgram ? "#ef4444" : "#374151";
-
   return (
     <div style={{
       display: "flex", flexDirection: "column", alignItems: "center",
       gap: 10, padding: "16px 12px",
       background: "#0f1117",
       border: `1px solid ${isProgram ? "rgba(239,68,68,0.3)" : "#1f2937"}`,
-      borderRadius: "10px",
-      minWidth: 80, maxWidth: 100,
+      borderRadius: "10px", minWidth: 80, maxWidth: 100,
       boxShadow: isProgram ? "0 0 16px rgba(239,68,68,0.08)" : "none",
-      transition: "border-color 0.15s",
+      transition: "border-color 0.15s, opacity 0.15s",
       opacity: muted ? 0.5 : 1,
     }}>
-
-      {/* PGM indicator */}
       <div style={{
         width: 8, height: 8, borderRadius: "50%",
         background: isProgram ? "#ef4444" : "#1f2937",
@@ -113,72 +98,36 @@ const ChannelStrip = ({ cam, volume, muted, solo, isProgram, onVolume, onMute, o
         transition: "all 0.15s",
       }} />
 
-      {/* VU meter */}
-      <VUMeter analyser={analyser} active={!muted} />
+      <VUMeter analyserRef={analyserRef} active={!muted} />
 
-      {/* Fader */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, width: "100%" }}>
-        <span style={{ fontSize: 9, color: "#4b5563", fontWeight: 500 }}>
-          {Math.round(volume * 100)}
-        </span>
-        <input
-          type="range"
-          min={0} max={1} step={0.01}
-          value={volume}
+        <span style={{ fontSize: 9, color: "#4b5563", fontWeight: 500 }}>{Math.round(volume * 100)}</span>
+        <input type="range" min={0} max={1} step={0.01} value={volume}
           onChange={e => onVolume(parseFloat(e.target.value))}
-          style={{
-            writingMode: "vertical-lr",
-            direction: "rtl",
-            height: 100,
-            width: 20,
-            cursor: "pointer",
-            accentColor: isProgram ? "#ef4444" : "#22c55e",
-          }}
-        />
+          style={{ writingMode: "vertical-lr", direction: "rtl", height: 100, width: 20, cursor: "pointer", accentColor: isProgram ? "#ef4444" : "#22c55e" }} />
       </div>
 
-      {/* Solo */}
-      <button
-        onClick={onSolo}
-        style={{
-          width: "100%", padding: "4px 0",
-          background: solo ? "rgba(245,158,11,0.2)" : "transparent",
-          border: `1px solid ${solo ? "#f59e0b" : "#1f2937"}`,
-          borderRadius: "4px", color: solo ? "#f59e0b" : "#4b5563",
-          fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-          cursor: "pointer", fontFamily: "inherit",
-          transition: "all 0.15s",
-        }}
-      >
-        S
-      </button>
+      <button onClick={onSolo} style={{
+        width: "100%", padding: "4px 0",
+        background: solo ? "rgba(245,158,11,0.2)" : "transparent",
+        border: `1px solid ${solo ? "#f59e0b" : "#1f2937"}`,
+        borderRadius: "4px", color: solo ? "#f59e0b" : "#4b5563",
+        fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+        cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+      }}>S</button>
 
-      {/* Mute */}
-      <button
-        onClick={onMute}
-        style={{
-          width: "100%", padding: "4px 0",
-          background: muted ? "rgba(239,68,68,0.2)" : "transparent",
-          border: `1px solid ${muted ? "#ef4444" : "#1f2937"}`,
-          borderRadius: "4px", color: muted ? "#ef4444" : "#4b5563",
-          fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-          cursor: "pointer", fontFamily: "inherit",
-          transition: "all 0.15s",
-        }}
-      >
-        M
-      </button>
+      <button onClick={onMute} style={{
+        width: "100%", padding: "4px 0",
+        background: muted ? "rgba(239,68,68,0.2)" : "transparent",
+        border: `1px solid ${muted ? "#ef4444" : "#1f2937"}`,
+        borderRadius: "4px", color: muted ? "#ef4444" : "#4b5563",
+        fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+        cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+      }}>M</button>
 
-      {/* Channel name */}
       <div style={{ textAlign: "center" }}>
-        <p style={{ fontSize: 10, fontWeight: 600, color: isProgram ? "#ef4444" : "#9ca3af", margin: 0 }}>
-          {cam.name}
-        </p>
-        {cam.label && (
-          <p style={{ fontSize: 9, color: "#374151", margin: "2px 0 0", lineHeight: 1.2 }}>
-            {cam.label}
-          </p>
-        )}
+        <p style={{ fontSize: 10, fontWeight: 600, color: isProgram ? "#ef4444" : "#9ca3af", margin: 0 }}>{cam.name}</p>
+        {cam.label && <p style={{ fontSize: 9, color: "#374151", margin: "2px 0 0", lineHeight: 1.2 }}>{cam.label}</p>}
       </div>
     </div>
   );
@@ -188,26 +137,42 @@ const ChannelStrip = ({ cam, volume, muted, solo, isProgram, onVolume, onMute, o
 export default function AudioConsole() {
   const roomId = getParam("room", null);
 
-  const [slots, setSlots]           = useState(() => getDirectorSlots() || []);
+  const [slots, setSlots]         = useState(() => getDirectorSlots() || []);
   const [liveStatus, setLiveStatus] = useState(new Map());
-  const [tally, setTally]           = useState({});
-  const [wsStatus, setWsStatus]     = useState("connecting");
-
-  // Per-channel state: volume (0–1), muted, solo
-  const [volumes, setVolumes]       = useState({});
-  const [mutes, setMutes]           = useState({});
-  const [solos, setSolos]           = useState({});
-  const [masterVolume, setMasterVolume] = useState(1);
-  const [masterMuted, setMasterMuted]   = useState(false);
+  const [tally, setTally]         = useState({});
+  const [wsStatus, setWsStatus]   = useState("connecting");
   const [audioEnabled, setAudioEnabled] = useState(false);
 
-  const wsRef             = useRef(null);
-  const peerConnections   = useRef(new Map());
-  const audioCtxRef       = useRef(null);
-  const masterGainRef     = useRef(null);
-  const gainNodesRef      = useRef(new Map()); // cameraId -> GainNode
-  const analyserNodesRef  = useRef(new Map()); // cameraId -> AnalyserNode
-  const audioSourcesRef   = useRef(new Map()); // cameraId -> MediaStreamAudioSourceNode
+  // UI state — only for rendering
+  const [volumes, setVolumes]         = useState({});     // cameraId -> 0–1
+  const [mutes, setMutes]             = useState({});     // cameraId -> bool
+  const [solos, setSolos]             = useState({});     // cameraId -> bool
+  const [masterVolume, setMasterVolume] = useState(1);
+  const [masterMuted, setMasterMuted]   = useState(false);
+
+  // Refs — always current values, safe to use inside stable callbacks
+  const volumesRef      = useRef({});
+  const mutesRef        = useRef({});
+  const solosRef        = useRef({});
+  const masterVolumeRef = useRef(1);
+  const masterMutedRef  = useRef(false);
+
+  // Keep refs in sync with state
+  useEffect(() => { volumesRef.current = volumes; }, [volumes]);
+  useEffect(() => { mutesRef.current = mutes; }, [mutes]);
+  useEffect(() => { solosRef.current = solos; }, [solos]);
+  useEffect(() => { masterVolumeRef.current = masterVolume; }, [masterVolume]);
+  useEffect(() => { masterMutedRef.current = masterMuted; }, [masterMuted]);
+
+  // Audio graph refs — never change, no dependency issues
+  const wsRef            = useRef(null);
+  const peerConnections  = useRef(new Map()); // cameraId -> RTCPeerConnection
+  const pendingStreams    = useRef(new Map()); // cameraId -> MediaStream (arrived before audio enabled)
+  const audioCtxRef      = useRef(null);
+  const masterGainRef    = useRef(null);
+  const gainNodesRef     = useRef(new Map());    // cameraId -> GainNode
+  const analyserRefs     = useRef(new Map());    // cameraId -> { current: AnalyserNode }
+  const audioSourcesRef  = useRef(new Map());    // cameraId -> source node
 
   useEffect(() => { document.title = "Audio | PGM Pro"; }, []);
 
@@ -216,24 +181,30 @@ export default function AudioConsole() {
     ...(liveStatus.get(slot.id) || { connected: false, hasStream: false }),
   }));
 
-  // ── Init AudioContext ──────────────────────────────────────────────────────
-  const enableAudio = useCallback(() => {
-    if (audioCtxRef.current) return;
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    audioCtxRef.current = ctx;
-    const master = ctx.createGain();
-    master.gain.value = masterVolume;
-    master.connect(ctx.destination);
-    masterGainRef.current = master;
-    setAudioEnabled(true);
-  }, [masterVolume]);
+  // ── Recalculate all gain values (called after any mix change) ────────────
+  const recalcGains = useCallback(() => {
+    const anySolo = Object.values(solosRef.current).some(Boolean);
+    gainNodesRef.current.forEach((gain, id) => {
+      if (mutesRef.current[id]) { gain.gain.value = 0; return; }
+      const vol = volumesRef.current[id] ?? 0.8;
+      gain.gain.value = anySolo ? (solosRef.current[id] ? vol : 0) : vol;
+    });
+  }, []); // no deps — reads from refs only
 
-  // ── Wire an incoming stream into the audio graph ───────────────────────────
+  // ── Master gain ───────────────────────────────────────────────────────────
+  const recalcMaster = useCallback(() => {
+    if (!masterGainRef.current) return;
+    masterGainRef.current.gain.value = masterMutedRef.current ? 0 : masterVolumeRef.current;
+  }, []);
+
+  // ── Wire a stream into the audio graph ───────────────────────────────────
+  // Stable — no state dependencies, reads from refs
   const wireAudio = useCallback((cameraId, stream) => {
-    const ctx = audioCtxRef.current;
+    const ctx    = audioCtxRef.current;
     const master = masterGainRef.current;
     if (!ctx || !master) return;
     if (audioSourcesRef.current.has(cameraId)) return;
+
     const audioTracks = stream.getAudioTracks();
     if (!audioTracks.length) return;
 
@@ -242,70 +213,92 @@ export default function AudioConsole() {
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
 
-    // Initial volume from state
-    gain.gain.value = volumes[cameraId] ?? 0.8;
+    // Set initial gain from current ref values
+    const vol = volumesRef.current[cameraId] ?? 0.8;
+    gain.gain.value = mutesRef.current[cameraId] ? 0 : vol;
 
     source.connect(gain);
     gain.connect(analyser);
     analyser.connect(master);
 
     gainNodesRef.current.set(cameraId, gain);
-    analyserNodesRef.current.set(cameraId, analyser);
     audioSourcesRef.current.set(cameraId, source);
-  }, [volumes]);
 
-  // ── Volume change ──────────────────────────────────────────────────────────
+    // Create a stable ref object for the analyser (for VUMeter)
+    if (!analyserRefs.current.has(cameraId)) {
+      analyserRefs.current.set(cameraId, { current: analyser });
+    } else {
+      analyserRefs.current.get(cameraId).current = analyser;
+    }
+  }, []); // stable — no state deps
+
+  // ── Enable AudioContext (requires user gesture) ───────────────────────────
+  const enableAudio = useCallback(() => {
+    if (audioCtxRef.current) return;
+    const ctx    = new (window.AudioContext || window.webkitAudioContext)();
+    const master = ctx.createGain();
+    master.gain.value = masterVolumeRef.current;
+    master.connect(ctx.destination);
+    audioCtxRef.current = ctx;
+    masterGainRef.current = master;
+    setAudioEnabled(true);
+
+    // Wire any streams that arrived before audio was enabled
+    pendingStreams.current.forEach((stream, cameraId) => wireAudio(cameraId, stream));
+    pendingStreams.current.clear();
+  }, [wireAudio]);
+
+  // ── Volume change ─────────────────────────────────────────────────────────
   const handleVolume = useCallback((cameraId, value) => {
     setVolumes(prev => ({ ...prev, [cameraId]: value }));
-    const gain = gainNodesRef.current.get(cameraId);
-    if (gain) gain.gain.value = mutes[cameraId] ? 0 : value;
-    // Sync to server so director console stays in sync
+    volumesRef.current = { ...volumesRef.current, [cameraId]: value };
+    recalcGains();
     wsRef.current?.send(JSON.stringify({
-      type: "audio-level", cameraId, volume: value, muted: mutes[cameraId] || false,
+      type: "audio-level", cameraId, volume: value, muted: mutesRef.current[cameraId] || false,
     }));
-  }, [mutes]);
+  }, [recalcGains]);
 
   // ── Mute toggle ───────────────────────────────────────────────────────────
   const handleMute = useCallback((cameraId) => {
-    setMutes(prev => {
-      const next = { ...prev, [cameraId]: !prev[cameraId] };
-      const gain = gainNodesRef.current.get(cameraId);
-      if (gain) gain.gain.value = next[cameraId] ? 0 : (volumes[cameraId] ?? 0.8);
-      wsRef.current?.send(JSON.stringify({
-        type: "audio-level", cameraId, volume: volumes[cameraId] ?? 0.8, muted: next[cameraId],
-      }));
-      return next;
-    });
-  }, [volumes]);
+    const next = !mutesRef.current[cameraId];
+    setMutes(prev => ({ ...prev, [cameraId]: next }));
+    mutesRef.current = { ...mutesRef.current, [cameraId]: next };
+    recalcGains();
+    wsRef.current?.send(JSON.stringify({
+      type: "audio-level", cameraId, volume: volumesRef.current[cameraId] ?? 0.8, muted: next,
+    }));
+  }, [recalcGains]);
 
   // ── Solo toggle ───────────────────────────────────────────────────────────
   const handleSolo = useCallback((cameraId) => {
-    setSolos(prev => {
-      const next = { ...prev, [cameraId]: !prev[cameraId] };
-      // When soloing: silence all others, restore when no solos active
-      const anySolo = Object.values(next).some(Boolean);
-      gainNodesRef.current.forEach((gain, id) => {
-        if (mutes[id]) { gain.gain.value = 0; return; }
-        gain.gain.value = anySolo ? (next[id] ? (volumes[id] ?? 0.8) : 0) : (volumes[id] ?? 0.8);
-      });
-      return next;
-    });
-  }, [volumes, mutes]);
+    const next = !solosRef.current[cameraId];
+    setSolos(prev => ({ ...prev, [cameraId]: next }));
+    solosRef.current = { ...solosRef.current, [cameraId]: next };
+    recalcGains();
+  }, [recalcGains]);
 
   // ── Master volume ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!masterGainRef.current) return;
-    masterGainRef.current.gain.value = masterMuted ? 0 : masterVolume;
-  }, [masterVolume, masterMuted]);
+  const handleMasterVolume = useCallback((value) => {
+    setMasterVolume(value);
+    masterVolumeRef.current = value;
+    recalcMaster();
+  }, [recalcMaster]);
 
-  // ── WebRTC ────────────────────────────────────────────────────────────────
+  const handleMasterMute = useCallback(() => {
+    const next = !masterMutedRef.current;
+    setMasterMuted(next);
+    masterMutedRef.current = next;
+    recalcMaster();
+  }, [recalcMaster]);
+
+  // ── WebRTC — stable, no state deps ───────────────────────────────────────
   const initiatePeerConnection = useCallback(async (cameraId) => {
     peerConnections.current.get(cameraId)?.close();
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     peerConnections.current.set(cameraId, pc);
 
+    // Audio only — no video needed for audio console
     pc.addTransceiver("audio", { direction: "recvonly" });
-    // No video transceiver — audio console doesn't need video
 
     pc.ontrack = (event) => {
       if (event.track.kind !== "audio") return;
@@ -315,12 +308,11 @@ export default function AudioConsole() {
         next.set(cameraId, { ...(next.get(cameraId) || {}), hasStream: true });
         return next;
       });
-      if (audioCtxRef.current) wireAudio(cameraId, stream);
-      else {
-        // Queue for when audio is enabled
-        const check = setInterval(() => {
-          if (audioCtxRef.current) { wireAudio(cameraId, stream); clearInterval(check); }
-        }, 200);
+      if (audioCtxRef.current) {
+        wireAudio(cameraId, stream);
+      } else {
+        // Queue until user enables audio
+        pendingStreams.current.set(cameraId, stream);
       }
     };
 
@@ -337,9 +329,9 @@ export default function AudioConsole() {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     wsRef.current?.send(JSON.stringify({ type: "sdp-offer", to: cameraId, sdp: offer }));
-  }, [wireAudio]);
+  }, [wireAudio]); // wireAudio is also stable
 
-  // ── WebSocket ─────────────────────────────────────────────────────────────
+  // ── WebSocket — depends only on roomId and initiatePeerConnection ─────────
   useEffect(() => {
     if (!roomId) return;
 
@@ -390,9 +382,12 @@ export default function AudioConsole() {
             setTally(prev => ({ ...prev, [msg.cameraId]: msg.state }));
             break;
           case "audio-level":
-            // Sync from director if A1 isn't the one who sent it
+            // Sync from server (could be from another audio console instance)
             setVolumes(prev => ({ ...prev, [msg.cameraId]: msg.volume }));
+            volumesRef.current = { ...volumesRef.current, [msg.cameraId]: msg.volume };
             setMutes(prev => ({ ...prev, [msg.cameraId]: msg.muted }));
+            mutesRef.current = { ...mutesRef.current, [msg.cameraId]: msg.muted };
+            recalcGains();
             break;
           case "sdp-answer": {
             const pc = peerConnections.current.get(msg.from);
@@ -416,7 +411,7 @@ export default function AudioConsole() {
       peerConnections.current.forEach(pc => pc.close());
       if (audioCtxRef.current) audioCtxRef.current.close();
     };
-  }, [roomId, initiatePeerConnection]);
+  }, [roomId, initiatePeerConnection, recalcGains]);
 
   const connectedCount = cameras.filter(c => c.connected).length;
 
@@ -434,13 +429,10 @@ export default function AudioConsole() {
       fontFamily: "'DM Sans', 'Helvetica Neue', Arial, sans-serif",
       color: "#e5e7eb", display: "flex", flexDirection: "column",
     }}>
-
       {/* Header */}
       <header style={{
-        height: 52, flexShrink: 0,
-        background: "#0f1117", borderBottom: "1px solid #1f2937",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 24px",
+        height: 52, flexShrink: 0, background: "#0f1117", borderBottom: "1px solid #1f2937",
+        display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <PGMWordmark height={20} />
@@ -448,7 +440,6 @@ export default function AudioConsole() {
             Audio
           </span>
         </div>
-
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{
@@ -460,29 +451,23 @@ export default function AudioConsole() {
               {connectedCount} of {cameras.length} online
             </span>
           </div>
-
           {!audioEnabled && (
-            <button
-              onClick={enableAudio}
-              style={{
-                background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)",
-                borderRadius: "6px", color: "#22c55e",
-                fontSize: 11, fontWeight: 600, padding: "6px 14px",
-                cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
+            <button onClick={enableAudio} style={{
+              background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)",
+              borderRadius: "6px", color: "#22c55e", fontSize: 11, fontWeight: 600,
+              padding: "6px 14px", cursor: "pointer", fontFamily: "inherit",
+            }}>
               Enable Audio
             </button>
           )}
         </div>
       </header>
 
-      {/* Channel strips */}
+      {/* Body */}
       <main style={{
         flex: 1, minHeight: 0, overflow: "hidden",
         padding: "20px 24px", display: "flex", flexDirection: "column", gap: 20,
       }}>
-
         {cameras.length === 0 ? (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <p style={{ fontSize: 13, color: "#374151", fontWeight: 500 }}>
@@ -491,7 +476,6 @@ export default function AudioConsole() {
           </div>
         ) : (
           <>
-            {/* Channel strips */}
             <section style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
               {cameras.map(cam => (
                 <ChannelStrip
@@ -504,56 +488,36 @@ export default function AudioConsole() {
                   onVolume={v => handleVolume(cam.id, v)}
                   onMute={() => handleMute(cam.id)}
                   onSolo={() => handleSolo(cam.id)}
-                  analyser={analyserNodesRef.current.get(cam.id)}
+                  analyserRef={analyserRefs.current.get(cam.id) || { current: null }}
                 />
               ))}
 
               {/* Master bus */}
               <div style={{
                 display: "flex", flexDirection: "column", alignItems: "center",
-                gap: 10, padding: "16px 12px",
-                background: "#0f1117", border: "1px solid #2a3447",
-                borderRadius: "10px", minWidth: 80, maxWidth: 100,
-                marginLeft: "auto",
+                gap: 10, padding: "16px 12px", background: "#0f1117",
+                border: "1px solid #2a3447", borderRadius: "10px",
+                minWidth: 80, maxWidth: 100, marginLeft: "auto",
               }}>
                 <span style={{ fontSize: 9, fontWeight: 700, color: "#6b7280", letterSpacing: "0.1em", textTransform: "uppercase" }}>Master</span>
-
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 9, color: "#4b5563", fontWeight: 500 }}>
-                    {Math.round(masterVolume * 100)}
-                  </span>
-                  <input
-                    type="range"
-                    min={0} max={1} step={0.01}
-                    value={masterVolume}
-                    onChange={e => setMasterVolume(parseFloat(e.target.value))}
-                    style={{
-                      writingMode: "vertical-lr", direction: "rtl",
-                      height: 100, width: 20, cursor: "pointer",
-                      accentColor: "#9ca3af",
-                    }}
-                  />
+                  <span style={{ fontSize: 9, color: "#4b5563", fontWeight: 500 }}>{Math.round(masterVolume * 100)}</span>
+                  <input type="range" min={0} max={1} step={0.01} value={masterVolume}
+                    onChange={e => handleMasterVolume(parseFloat(e.target.value))}
+                    style={{ writingMode: "vertical-lr", direction: "rtl", height: 100, width: 20, cursor: "pointer", accentColor: "#9ca3af" }} />
                 </div>
-
-                <button
-                  onClick={() => setMasterMuted(m => !m)}
-                  style={{
-                    width: "100%", padding: "4px 0",
-                    background: masterMuted ? "rgba(239,68,68,0.2)" : "transparent",
-                    border: `1px solid ${masterMuted ? "#ef4444" : "#1f2937"}`,
-                    borderRadius: "4px", color: masterMuted ? "#ef4444" : "#4b5563",
-                    fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-                    cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
-                  }}
-                >
-                  M
-                </button>
-
+                <button onClick={handleMasterMute} style={{
+                  width: "100%", padding: "4px 0",
+                  background: masterMuted ? "rgba(239,68,68,0.2)" : "transparent",
+                  border: `1px solid ${masterMuted ? "#ef4444" : "#1f2937"}`,
+                  borderRadius: "4px", color: masterMuted ? "#ef4444" : "#4b5563",
+                  fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+                  cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+                }}>M</button>
                 <span style={{ fontSize: 9, color: "#4b5563", fontWeight: 600, letterSpacing: "0.05em" }}>MSTR</span>
               </div>
             </section>
 
-            {/* Level legend */}
             <div style={{ display: "flex", alignItems: "center", gap: 16, paddingLeft: 4 }}>
               {[["#22c55e", "Signal"], ["#f59e0b", "Hot"], ["#ef4444", "Clip"]].map(([color, label]) => (
                 <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
